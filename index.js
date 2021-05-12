@@ -4,6 +4,7 @@ class Game {
       this.mariobBig = false;
       this.score = 0;
       this.gameOver = false;
+      this.youWin = false;
    }
 
    addScore = () => {
@@ -14,8 +15,37 @@ class Game {
       this.mariobBig = true;
    };
 
+   makeMarioSmall = () => {
+      this.mariobBig = false;
+   };
+
    addLife = () => {
       this.lifes++;
+   };
+
+   dead = () => {
+      this.lifes--;
+      this.score = 0;
+      if (this.lifes === 0) this.gameOver = true;
+   };
+
+   win = () => {
+      this.youWin = true;
+   };
+}
+
+class Enemy {
+   constructor() {
+      this.isAlive = true;
+      this.direction = true;
+   }
+
+   dead = () => {
+      this.isAlive = false;
+   };
+
+   changeDirection = () => {
+      this.direction = !this.direction;
    };
 }
 
@@ -54,7 +84,7 @@ function preload() {
    });
 
    this.load.spritesheet("enemy", "assets/enemy.png", {
-      frameWidth: 49,
+      frameWidth: 45,
       frameHeight: 41,
    });
 }
@@ -68,16 +98,15 @@ let player;
 let jump;
 let gameoverText;
 let winText;
-let gameOver = false;
 const END_GAME = 7953;
 let reset;
 let gameInstance;
 let scoreText;
-let enemy;
+let enemiesObjects = [];
+let enemies = [];
+gameInstance = new Game();
 
 function create() {
-   gameInstance = new Game();
-
    map1 = this.make.tilemap({ key: "map1" });
    tileset1 = map1.addTilesetImage("SuperMarioBros-World1-1", "tiles1");
 
@@ -96,6 +125,11 @@ function create() {
    //zielony grzyb
    map1.setTileIndexCallback(18, addLife, this);
 
+   //odbijanie od scianek
+   map1.setTileIndexCallback(16, changeDir, this);
+   map1.setTileIndexCallback(27, changeDir, this);
+   map1.setTileIndexCallback(28, changeDir, this);
+
    const SCALE = game.scale.height / layer1.height;
 
    layer1.setScale(SCALE);
@@ -107,8 +141,18 @@ function create() {
    player.setBounce(0.2);
    player.body.gravity.y = 700;
 
-   enemy = this.physics.add.sprite(1000, 100, "enemy");
-   enemy.body.gravity.y = 500;
+   let enemiesX = [
+      1000, 1020, 2000, 3000, 4000, 5000, 6000, 7000, 2100, 2200, 2500, 3000,
+      4500, 984, 5456, 2056, 7200, 3800, 1250, 6504,
+   ];
+
+   for (let i = 0; i < 20; i++) {
+      let enemy = this.physics.add.sprite(enemiesX[i], 100, "enemy");
+      enemy.body.gravity.y = 500;
+      enemy.setScale(0.8);
+      enemies.push(enemy);
+      enemiesObjects.push(new Enemy());
+   }
 
    //kamera
    this.cameras.main.setBounds(
@@ -142,6 +186,18 @@ function create() {
    this.anims.create({
       key: "jump",
       frames: this.anims.generateFrameNumbers("player", { frames: [6] }),
+      frameRate: 10,
+      repeat: -1,
+   });
+   this.anims.create({
+      key: "enemywalk",
+      frames: this.anims.generateFrameNumbers("enemy", { start: 0, end: 1 }),
+      frameRate: 10,
+      repeat: -1,
+   });
+   this.anims.create({
+      key: "enemydead",
+      frames: this.anims.generateFrameNumbers("enemy", { frames: [2] }),
       frameRate: 10,
       repeat: -1,
    });
@@ -192,11 +248,20 @@ let isJumping = false;
 
 function update() {
    this.physics.collide(player, layer1);
-   this.physics.collide(enemy, layer1);
 
-   if (enemy.body.onFloor()) enemy.setVelocityX(-100);
-
-   if (!gameOver) {
+   if (!gameInstance.gameOver && !gameInstance.youWin) {
+      enemies.forEach((enemy, idx) => {
+         this.physics.collide(enemy, layer1);
+         this.physics.collide(player, enemy, (player, enemy) =>
+            enemyhit(player, enemy, this)
+         );
+         try {
+            if (enemiesObjects[idx].isAlive && enemy != undefined) {
+               if (enemiesObjects[idx].direction) enemy.setVelocityX(-100);
+               else enemy.setVelocityX(100);
+            } else if (enemy != undefined) enemy.setVelocityX(0);
+         } catch {}
+      });
       if (cursors.up.isDown) {
          isJumping = true;
          player.anims.play("jump");
@@ -220,20 +285,21 @@ function update() {
          player.setVelocityX(0);
          if (!isJumping) player.anims.play("front");
       }
-
+      //smierc przez spadniecie
       if (player.y > game.scale.height - 40) {
-         const screenCenterX =
-            this.cameras.main.worldView.x + this.cameras.main.width / 2;
-         const screenCenterY =
-            this.cameras.main.worldView.y + this.cameras.main.height / 2;
-         player.disableBody(true, true);
-         gameoverText.y = screenCenterY;
-         gameoverText.x = screenCenterX;
-         gameoverText.visible = true;
-         gameOver = true;
+         gameInstance.dead();
+         this.scene.restart();
       }
 
-      if (player.x === END_GAME) {
+      enemies.forEach((enemy, idx) => {
+         try {
+            if (enemiesObjects[idx].isAlive)
+               enemy.anims.play("enemywalk", true);
+            else enemy.anims.play("enemydead", true);
+         } catch {}
+      });
+
+      if (player.x >= END_GAME) {
          const screenCenterX =
             this.cameras.main.worldView.x + this.cameras.main.width / 2;
          const screenCenterY =
@@ -242,14 +308,24 @@ function update() {
          winText.y = screenCenterY;
          winText.x = screenCenterX;
          winText.visible = true;
-         gameOver = true;
+         gameInstance.win();
       }
+   } else if (!gameInstance.youWin) {
+      const screenCenterX =
+         this.cameras.main.worldView.x + this.cameras.main.width / 2;
+      const screenCenterY =
+         this.cameras.main.worldView.y + this.cameras.main.height / 2;
+      player.disableBody(true, true);
+      gameoverText.y = screenCenterY;
+      gameoverText.x = screenCenterX;
+      gameoverText.visible = true;
+      gameOver = true;
    }
-   if (gameOver && reset.isDown) {
+   if ((gameInstance.gameOver || gameInstance.youWin) && reset.isDown) {
       this.registry.destroy(); // destroy registry
       this.events.off(); // disable all active events
       this.scene.restart(); // restart current scene
-      gameOver = false;
+      gameInstance = new Game();
    }
 }
 function getCoin(sprite, coin) {
@@ -277,5 +353,37 @@ function addLife(sprite, mushroom) {
       scoreText.setText(
          `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}`
       );
+   }
+}
+
+function changeDir(sprite, wall) {
+   let enemy = enemies.findIndex((e) => e === sprite);
+   if (enemy !== -1) enemiesObjects[enemy].changeDirection();
+}
+
+let block = false;
+
+function enemyhit(player, enemy, game) {
+   if (player.y < enemy.y - 20) {
+      let idx = enemies.findIndex((e) => e === enemy);
+      if (idx !== -1) enemiesObjects[idx].dead();
+   } else {
+      let idx = enemies.findIndex((e) => e === enemy);
+      if (idx !== -1) {
+         if (enemiesObjects[idx].isAlive) {
+            if (!block) {
+               if (gameInstance.mariobBig) {
+                  player.setScale(1);
+                  gameInstance.makeMarioSmall();
+               } else {
+                  gameInstance.dead();
+                  game.scene.restart();
+               }
+               setTimeout(() => {
+                  block = false;
+               }, 3000);
+            }
+         }
+      }
    }
 }
