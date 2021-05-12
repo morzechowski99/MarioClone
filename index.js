@@ -5,10 +5,12 @@ class Game {
       this.score = 0;
       this.gameOver = false;
       this.youWin = false;
+      this.bullets = 0;
    }
 
-   addScore = () => {
-      this.score++;
+   addScore = (score) => {
+      if (score === undefined) this.score++;
+      else this.score += score;
    };
 
    makeMarioBig = () => {
@@ -26,11 +28,16 @@ class Game {
    dead = () => {
       this.lifes--;
       this.score = 0;
+      this.bullets = 0;
       if (this.lifes === 0) this.gameOver = true;
    };
 
    win = () => {
       this.youWin = true;
+   };
+
+   addBullets = (count) => {
+      this.bullets += count;
    };
 }
 
@@ -78,6 +85,11 @@ function preload() {
       "https://examples.phaser.io/assets/tilemaps/tiles/super_mario.png"
    );
 
+   this.load.image(
+      "ball",
+      "https://examples.phaser.io/assets/sprites/green_ball.png"
+   );
+
    this.load.spritesheet("player", "assets/marioSmall.png", {
       frameWidth: 34,
       frameHeight: 34,
@@ -100,10 +112,12 @@ let gameoverText;
 let winText;
 const END_GAME = 7953;
 let reset;
+let shot;
 let gameInstance;
 let scoreText;
 let enemiesObjects = [];
 let enemies = [];
+let bullets;
 gameInstance = new Game();
 
 function create() {
@@ -124,6 +138,8 @@ function create() {
 
    //zielony grzyb
    map1.setTileIndexCallback(18, addLife, this);
+   //gwiazdka
+   map1.setTileIndexCallback(19, collectStar, this);
 
    //odbijanie od scianek
    map1.setTileIndexCallback(16, changeDir, this);
@@ -206,7 +222,7 @@ function create() {
    gameoverText = this.add.text(
       this.physics.world.bounds.centerX,
       250,
-      "GAME OVER",
+      "GAME OVER\nPress enter to reset game",
       {
          font: "60px ",
          fill: "#ffffff",
@@ -222,7 +238,7 @@ function create() {
       250,
       "YOU WIN \nPress enter to reset game",
       {
-         font: "60px ",
+         font: "40px ",
          fill: "#ffffff",
          align: "center",
       }
@@ -234,7 +250,7 @@ function create() {
    scoreText = this.add.text(
       16,
       16,
-      `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}`,
+      `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}\nBullets: ${gameInstance.bullets}`,
       {
          fontSize: "32px",
          fill: "#000",
@@ -242,14 +258,44 @@ function create() {
    );
    scoreText.setScrollFactor(0);
    reset = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+   shot = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+
+   //strzaly
+   bullets = this.physics.add.group();
+
+   this.physics.add.collider(bullets, layer1, deleteBullet, null, this);
+
+   enemies.forEach((enemy) => {
+      this.physics.add.collider(bullets, enemy, hitEnemy, null, this);
+   });
 }
 
 let isJumping = false;
+let shotBlock = false;
 
 function update() {
    this.physics.collide(player, layer1);
 
    if (!gameInstance.gameOver && !gameInstance.youWin) {
+      if (shot.isDown) {
+         if (gameInstance.bullets > 0 && !shotBlock) {
+            let bullet = bullets.create(player.x, player.y - 15, "ball");
+            bullet.setBounce(1);
+            bullet.setCollideWorldBounds(true);
+            bullet.body.gravity.y = 500;
+            gameInstance.bullets--;
+            scoreText.setText(
+               `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}\nBullets: ${gameInstance.bullets}`
+            );
+            if (player.scaleX === 1) bullet.setVelocityX(500);
+            else bullet.setVelocityX(-500);
+            shotBlock = true;
+            setTimeout(() => {
+               shotBlock = false;
+            }, 500);
+         }
+      }
+
       enemies.forEach((enemy, idx) => {
          this.physics.collide(enemy, layer1);
          this.physics.collide(player, enemy, (player, enemy) =>
@@ -307,8 +353,12 @@ function update() {
 
          winText.y = screenCenterY;
          winText.x = screenCenterX;
+         winText.setText(
+            `YOU WIN\nSCORE:${gameInstance.score}\nPress enter to reset game`
+         );
          winText.visible = true;
          gameInstance.win();
+         this.physics.pause();
       }
    } else if (!gameInstance.youWin) {
       const screenCenterX =
@@ -320,6 +370,7 @@ function update() {
       gameoverText.x = screenCenterX;
       gameoverText.visible = true;
       gameOver = true;
+      this.physics.pause();
    }
    if ((gameInstance.gameOver || gameInstance.youWin) && reset.isDown) {
       this.registry.destroy(); // destroy registry
@@ -333,7 +384,7 @@ function getCoin(sprite, coin) {
       layer1.replaceByIndex(11, 1, coin.x, coin.y, 1, 1);
       gameInstance.addScore();
       scoreText.setText(
-         `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}`
+         `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}\nBullets: ${gameInstance.bullets}`
       );
    }
 }
@@ -351,7 +402,17 @@ function addLife(sprite, mushroom) {
       layer1.replaceByIndex(18, 1, mushroom.x, mushroom.y, 1, 1);
       gameInstance.addLife();
       scoreText.setText(
-         `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}`
+         `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}\nBullets: ${gameInstance.bullets}`
+      );
+   }
+}
+
+function collectStar(sprite, star) {
+   if (sprite === player) {
+      layer1.replaceByIndex(19, 1, star.x, star.y, 1, 1);
+      gameInstance.addBullets(10);
+      scoreText.setText(
+         `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}\nBullets: ${gameInstance.bullets}`
       );
    }
 }
@@ -364,9 +425,18 @@ function changeDir(sprite, wall) {
 let block = false;
 
 function enemyhit(player, enemy, game) {
-   if (player.y < enemy.y - 20) {
+   console.log(enemy);
+   if (player.y < enemy.y - 30) {
       let idx = enemies.findIndex((e) => e === enemy);
-      if (idx !== -1) enemiesObjects[idx].dead();
+      if (idx !== -1) {
+         if (enemiesObjects[idx].isAlive) {
+            enemiesObjects[idx].dead();
+            gameInstance.addScore(10);
+            scoreText.setText(
+               `Score: ${gameInstance.score} \nLifes: ${gameInstance.lifes}\nBullets: ${gameInstance.bullets}`
+            );
+         }
+      }
    } else {
       let idx = enemies.findIndex((e) => e === enemy);
       if (idx !== -1) {
@@ -379,11 +449,28 @@ function enemyhit(player, enemy, game) {
                   gameInstance.dead();
                   game.scene.restart();
                }
+               block = true;
                setTimeout(() => {
                   block = false;
-               }, 3000);
+               }, 1000);
             }
          }
+      }
+   }
+}
+
+function deleteBullet(bullet, sprite) {
+   bullet.disableBody(true, true);
+}
+
+function hitEnemy(enemy, bullet) {
+   console.log(enemy);
+   let idx = enemies.findIndex((e) => e === enemy);
+   console.log("im here");
+   if (idx !== -1) {
+      console.log("im here2");
+      if (enemiesObjects[idx].isAlive) {
+         enemiesObjects[idx].dead();
       }
    }
 }
