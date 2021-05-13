@@ -1,3 +1,4 @@
+//klasa z danymi rozgrywki
 class Game {
    constructor() {
       this.lifes = 5;
@@ -41,6 +42,7 @@ class Game {
    };
 }
 
+//klasa przeciwnika
 class Enemy {
    constructor() {
       this.isAlive = true;
@@ -56,6 +58,7 @@ class Enemy {
    };
 }
 
+//konfiguracja gry
 const config = {
    type: Phaser.AUTO,
    width: 1000,
@@ -71,36 +74,39 @@ const config = {
       arcade: { debug: false },
    },
 };
-var game = new Phaser.Game(config);
+var game = new Phaser.Game(config); // tworzenie gry
 
 function preload() {
    this.load.crossOrigin = "anonymous";
 
+   //mapa
    this.load.tilemapTiledJSON(
       "map1",
       "https://examples.phaser.io/assets/tilemaps/maps/super_mario.json"
    );
+   //tiles do mapy
    this.load.image(
       "tiles1",
       "https://examples.phaser.io/assets/tilemaps/tiles/super_mario.png"
    );
-
+   //pilka
    this.load.image(
       "ball",
       "https://examples.phaser.io/assets/sprites/green_ball.png"
    );
-
+   //mario
    this.load.spritesheet("player", "assets/marioSmall.png", {
       frameWidth: 34,
       frameHeight: 34,
    });
-
+   //wrog
    this.load.spritesheet("enemy", "assets/enemy.png", {
       frameWidth: 45,
       frameHeight: 41,
    });
 }
 
+//zmienne
 let cursors;
 let map1;
 let layer1;
@@ -110,6 +116,7 @@ let player;
 let jump;
 let gameoverText;
 let winText;
+//koniec gry - wartosc pixeli
 const END_GAME = 7953;
 let reset;
 let shot;
@@ -118,6 +125,7 @@ let scoreText;
 let enemiesObjects = [];
 let enemies = [];
 let bullets;
+//tworzenie instancji klasy danych gry
 gameInstance = new Game();
 
 function create() {
@@ -126,7 +134,7 @@ function create() {
 
    layer1 = map1.createLayer("World1", tileset1, 0, 0);
 
-   //kolizje
+   //kolizje na mapie
    map1.setCollision([
       14, 15, 16, 20, 21, 22, 23, 24, 25, 27, 28, 29, 33, 39, 40,
    ]);
@@ -141,27 +149,30 @@ function create() {
    //gwiazdka
    map1.setTileIndexCallback(19, collectStar, this);
 
-   //odbijanie od scianek
+   //odbijanie sie wrogow od scianek
    map1.setTileIndexCallback(16, changeDir, this);
    map1.setTileIndexCallback(27, changeDir, this);
    map1.setTileIndexCallback(28, changeDir, this);
 
+   //skalowanie mapy do wielkosci ekranu
    const SCALE = game.scale.height / layer1.height;
-
    layer1.setScale(SCALE);
 
    cursors = this.input.keyboard.createCursorKeys();
 
+   //tworzenie gracza
    player = this.physics.add.sprite(50, 100, "player");
    player.setCollideWorldBounds(true, true, false, false);
    player.setBounce(0.2);
    player.body.gravity.y = 700;
 
+   //wspolrzedne respienia wrogow
    let enemiesX = [
       1000, 1020, 2000, 3000, 4000, 5000, 6000, 7000, 2100, 2200, 2500, 3000,
       4500, 984, 5456, 2056, 7200, 3800, 1250, 6504,
    ];
 
+   //tworzenie wrogow
    for (let i = 0; i < 20; i++) {
       let enemy = this.physics.add.sprite(enemiesX[i], 100, "enemy");
       enemy.body.gravity.y = 500;
@@ -170,19 +181,21 @@ function create() {
       enemiesObjects.push(new Enemy());
    }
 
-   //kamera
+   //granice kamery
    this.cameras.main.setBounds(
       0,
       0,
       layer1.width * SCALE,
       layer1.height * SCALE
    );
+   //granice swiata
    this.physics.world.setBounds(
       0,
       0,
       layer1.width * SCALE,
       layer1.height * SCALE
    );
+   //kamera sledzi gracza
    this.cameras.main.startFollow(player);
 
    //animacje
@@ -256,11 +269,13 @@ function create() {
          fill: "#000",
       }
    );
+   //tekst "przyklejony" do kamery
    scoreText.setScrollFactor(0);
+   //bindoiwanie klawiszy
    reset = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
    shot = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
-   //strzaly
+   //strzaly -definiowanie
    bullets = this.physics.add.group();
 
    this.physics.add.collider(bullets, layer1, deleteBullet, null, this);
@@ -270,14 +285,17 @@ function create() {
    });
 }
 
+//flagi
 let isJumping = false;
 let shotBlock = false;
 
 function update() {
+   //kolizje miedzy playerem a tilesami mapy
    this.physics.collide(player, layer1);
 
    if (!gameInstance.gameOver && !gameInstance.youWin) {
       if (shot.isDown) {
+         //strzelanie
          if (gameInstance.bullets > 0 && !shotBlock) {
             let bullet = bullets.create(player.x, player.y - 15, "ball");
             bullet.setBounce(1);
@@ -291,12 +309,14 @@ function update() {
             else bullet.setVelocityX(-500);
             shotBlock = true;
             setTimeout(() => {
+               //zeby nie strzelac za czesto
                shotBlock = false;
             }, 500);
          }
       }
 
       enemies.forEach((enemy, idx) => {
+         //sprawdzenie kolizji wrogow
          this.physics.collide(enemy, layer1);
          this.physics.collide(player, enemy, (player, enemy) =>
             enemyhit(player, enemy, this)
@@ -308,6 +328,7 @@ function update() {
             } else if (enemy != undefined) enemy.setVelocityX(0);
          } catch {}
       });
+      //ruch playera
       if (cursors.up.isDown) {
          isJumping = true;
          player.anims.play("jump");
@@ -336,7 +357,7 @@ function update() {
          gameInstance.dead();
          this.scene.restart();
       }
-
+      //animacja wrogow
       enemies.forEach((enemy, idx) => {
          try {
             if (enemiesObjects[idx].isAlive)
@@ -344,7 +365,7 @@ function update() {
             else enemy.anims.play("enemydead", true);
          } catch {}
       });
-
+      //warunek wygrania gry
       if (player.x >= END_GAME) {
          const screenCenterX =
             this.cameras.main.worldView.x + this.cameras.main.width / 2;
@@ -361,6 +382,7 @@ function update() {
          this.physics.pause();
       }
    } else if (!gameInstance.youWin) {
+      // gdy gra przegrana
       const screenCenterX =
          this.cameras.main.worldView.x + this.cameras.main.width / 2;
       const screenCenterY =
@@ -372,14 +394,16 @@ function update() {
       gameOver = true;
       this.physics.pause();
    }
+   //resetowanie gry
    if ((gameInstance.gameOver || gameInstance.youWin) && reset.isDown) {
-      this.registry.destroy(); // destroy registry
-      this.events.off(); // disable all active events
-      this.scene.restart(); // restart current scene
+      this.registry.destroy();
+      this.events.off();
+      this.scene.restart();
       gameInstance = new Game();
    }
 }
 function getCoin(sprite, coin) {
+   //callback lapania coina
    if (sprite === player) {
       layer1.replaceByIndex(11, 1, coin.x, coin.y, 1, 1);
       gameInstance.addScore();
@@ -390,6 +414,7 @@ function getCoin(sprite, coin) {
 }
 
 function makeMarioBig(sprite, mushroom) {
+   //callback czerwonego grzyba
    if (sprite === player) {
       layer1.replaceByIndex(12, 1, mushroom.x, mushroom.y, 1, 1);
       gameInstance.makeMarioBig();
@@ -398,6 +423,7 @@ function makeMarioBig(sprite, mushroom) {
 }
 
 function addLife(sprite, mushroom) {
+   //callback grzyba zielonego
    if (sprite === player) {
       layer1.replaceByIndex(18, 1, mushroom.x, mushroom.y, 1, 1);
       gameInstance.addLife();
@@ -408,6 +434,7 @@ function addLife(sprite, mushroom) {
 }
 
 function collectStar(sprite, star) {
+   //callback zlapania gwiazdki
    if (sprite === player) {
       layer1.replaceByIndex(19, 1, star.x, star.y, 1, 1);
       gameInstance.addBullets(10);
@@ -418,6 +445,7 @@ function collectStar(sprite, star) {
 }
 
 function changeDir(sprite, wall) {
+   //callback obijania wrogow od scian
    let enemy = enemies.findIndex((e) => e === sprite);
    if (enemy !== -1) enemiesObjects[enemy].changeDirection();
 }
@@ -425,8 +453,9 @@ function changeDir(sprite, wall) {
 let block = false;
 
 function enemyhit(player, enemy, game) {
-   console.log(enemy);
+   //callback zderzenia playera z wrogiem
    if (player.y < enemy.y - 30) {
+      //zabicie wroga
       let idx = enemies.findIndex((e) => e === enemy);
       if (idx !== -1) {
          if (enemiesObjects[idx].isAlive) {
@@ -438,6 +467,7 @@ function enemyhit(player, enemy, game) {
          }
       }
    } else {
+      //zabicie playera lub pomniejszenie jesli duzy
       let idx = enemies.findIndex((e) => e === enemy);
       if (idx !== -1) {
          if (enemiesObjects[idx].isAlive) {
@@ -460,15 +490,14 @@ function enemyhit(player, enemy, game) {
 }
 
 function deleteBullet(bullet, sprite) {
+   // znikanie kulek
    bullet.disableBody(true, true);
 }
 
 function hitEnemy(enemy, bullet) {
-   console.log(enemy);
+   //callvak zderzenia kuli z wrogiem
    let idx = enemies.findIndex((e) => e === enemy);
-   console.log("im here");
    if (idx !== -1) {
-      console.log("im here2");
       if (enemiesObjects[idx].isAlive) {
          enemiesObjects[idx].dead();
       }
